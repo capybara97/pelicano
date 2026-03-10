@@ -1,0 +1,36 @@
+# IDE
+.idea/
+.vs/
+.vscode/
+
+# Build output
+**/bin/
+**/obj/
+publish/
+dist/
+
+# Local tool caches
+.dotnet/
+.nuget/
+AppData/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Debug / symbols
+*.pdb
+
+# OS junk
+Thumbs.db
+Desktop.ini
+
+# Runtime data
+logs/
+*.db-shm
+*.db-wal
+
+# Scratch files
+MD.md
