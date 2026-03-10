@@ -18,9 +18,10 @@ internal sealed class SpasteApplicationContext : ApplicationContext
     private readonly TrayManager _trayManager;
     private readonly MainForm _mainForm;
     private readonly Icon _appIcon;
+    private readonly Dictionary<string, DateTimeOffset> _suppressedClipboardHashes =
+        new(StringComparer.OrdinalIgnoreCase);
     private AppSettings _settings;
     private List<ClipboardItem> _historyItems;
-    private bool _suppressNextClipboardEvent;
     private bool _isShuttingDown;
 
     /// <summary>
@@ -40,9 +41,9 @@ internal sealed class SpasteApplicationContext : ApplicationContext
 
         _mainForm = new MainForm(_settings);
         _mainForm.SetItems(_historyItems);
-        _mainForm.CopyPlainRequested += (_, item) => CopyItem(item);
         _mainForm.SelectionCopyRequested += (_, _) => CopySelection(_mainForm.SelectedItems);
         _mainForm.DeleteRequested += (_, item) => DeleteItem(item);
+        _mainForm.SelectionDeleteRequested += (_, _) => DeleteSelection(_mainForm.SelectedItems);
         _mainForm.SettingsRequested += (_, _) => ShowSettings();
         _mainForm.ClearRequested += (_, _) => ClearHistory();
         _mainForm.ExitRequested += (_, _) => ExitThread();
@@ -102,17 +103,12 @@ internal sealed class SpasteApplicationContext : ApplicationContext
             return;
         }
 
-        if (_suppressNextClipboardEvent)
-        {
-            _suppressNextClipboardEvent = false;
-            return;
-        }
-
         try
         {
+            PruneSuppressedClipboardHashes();
             var capturedItem = CaptureClipboardItem();
 
-            if (capturedItem is null || IsDuplicate(capturedItem))
+            if (capturedItem is null || ShouldSuppressCapturedItem(capturedItem) || IsDuplicate(capturedItem))
             {
                 return;
             }
@@ -121,7 +117,7 @@ internal sealed class SpasteApplicationContext : ApplicationContext
             TrimHistoryToLimit();
             PersistHistory();
             _mainForm.SetItems(_historyItems);
-            _logger.Audit("CAPTURE", $"{capturedItem.ItemKind} | {capturedItem.Title}");
+            _logger.Audit("CAPTURE", capturedItem.ItemKind.ToString());
         }
         catch (Exception exception)
         {
@@ -150,7 +146,10 @@ internal sealed class SpasteApplicationContext : ApplicationContext
 
             if (_settings.EnforcePlainTextOnly && hasRichFormatting)
             {
-                SetClipboardTextInternal(plainText, auditLabel: "TEXT_STRIPPED");
+                SetClipboardTextInternal(
+                    plainText,
+                    auditLabel: "TEXT_STRIPPED",
+                    contentHash: _textStripper.ComputeHash(plainText));
             }
 
             return CreateTextItem(plainText, hasRichFormatting ? "UnicodeText+Rich" : "UnicodeText");
@@ -172,18 +171,18 @@ internal sealed class SpasteApplicationContext : ApplicationContext
     /// </summary>
     private ClipboardItem CreateTextItem(string plainText, string sourceFormat)
     {
-        var markdown = _textStripper.ConvertToMarkdown(plainText);
+        var displayText = _textStripper.BuildDisplayText(plainText);
 
         return new ClipboardItem
         {
             ItemKind = ClipboardItemKind.Text,
             Title = _textStripper.BuildTitle(plainText),
             PlainText = plainText,
-            MarkdownText = markdown,
+            MarkdownText = string.Empty,
             SourceFormat = sourceFormat,
             ContentHash = _textStripper.ComputeHash(plainText),
             CapturedAt = DateTimeOffset.Now,
-            SearchIndex = _textStripper.BuildSearchIndex([plainText, markdown, sourceFormat])
+            SearchIndex = _textStripper.BuildSearchIndex([displayText, sourceFormat])
         };
     }
 
@@ -267,15 +266,23 @@ internal sealed class SpasteApplicationContext : ApplicationContext
             switch (item.ItemKind)
             {
                 case ClipboardItemKind.Text:
-                    SetClipboardTextInternal(item.PlainText, "COPY_TEXT");
+                    SetClipboardTextInternal(item.PlainText, "COPY_TEXT", item.ContentHash);
                     break;
 
                 case ClipboardItemKind.Image when !string.IsNullOrWhiteSpace(item.ImagePath):
-                    SetClipboardImageInternal(item.ImagePath!, "COPY_IMAGE");
+                    if (!AppPaths.IsManagedImagePath(item.ImagePath))
+                    {
+                        _logger.Error(
+                            "앱 관리 영역 밖의 이미지 경로가 히스토리 항목에 포함되어 복사를 중단했다.",
+                            new InvalidOperationException(item.ImagePath));
+                        break;
+                    }
+
+                    SetClipboardImageInternal(item.ImagePath!, "COPY_IMAGE", item.ContentHash);
                     break;
 
                 case ClipboardItemKind.FileDrop when item.FileDropPaths.Count > 0:
-                    SetClipboardFileDropInternal(item.FileDropPaths, "COPY_FILE");
+                    SetClipboardFileDropInternal(item.FileDropPaths, "COPY_FILE", item.ContentHash);
                     break;
             }
         }
@@ -312,7 +319,10 @@ internal sealed class SpasteApplicationContext : ApplicationContext
 
                 if (!string.IsNullOrWhiteSpace(combinedText))
                 {
-                    SetClipboardTextInternal(combinedText, "COPY_TEXT_MULTI");
+                    SetClipboardTextInternal(
+                        combinedText,
+                        "COPY_TEXT_MULTI",
+                        _textStripper.ComputeHash(combinedText));
                 }
 
                 return;
@@ -328,7 +338,11 @@ internal sealed class SpasteApplicationContext : ApplicationContext
 
                 if (mergedFilePaths.Count > 0)
                 {
-                    SetClipboardFileDropInternal(mergedFilePaths, "COPY_FILE_MULTI");
+                    SetClipboardFileDropInternal(
+                        mergedFilePaths,
+                        "COPY_FILE_MULTI",
+                        _textStripper.ComputeHash(
+                            string.Join('|', mergedFilePaths.Select(path => path.ToLowerInvariant()))));
                 }
 
                 return;
@@ -345,31 +359,41 @@ internal sealed class SpasteApplicationContext : ApplicationContext
     /// <summary>
     /// 내부 로직에서 텍스트를 다시 클립보드에 쓸 때 이벤트 재진입을 억제한다.
     /// </summary>
-    private void SetClipboardTextInternal(string text, string auditLabel)
+    private void SetClipboardTextInternal(string text, string auditLabel, string? contentHash = null)
     {
-        _suppressNextClipboardEvent = true;
+        RegisterSuppressedHash(contentHash ?? _textStripper.ComputeHash(text));
         ClipboardService.SetText(text);
-        _logger.Audit(auditLabel, _textStripper.BuildTitle(text));
+        _logger.Audit(auditLabel, "Text");
     }
 
     /// <summary>
     /// 내부 로직에서 저장된 이미지를 다시 클립보드에 쓸 때 이벤트 재진입을 억제한다.
     /// </summary>
-    private void SetClipboardImageInternal(string imagePath, string auditLabel)
+    private void SetClipboardImageInternal(string imagePath, string auditLabel, string? contentHash = null)
     {
-        _suppressNextClipboardEvent = true;
+        if (!string.IsNullOrWhiteSpace(contentHash))
+        {
+            RegisterSuppressedHash(contentHash);
+        }
+
         ClipboardService.SetImageFromFile(imagePath);
-        _logger.Audit(auditLabel, Path.GetFileName(imagePath));
+        _logger.Audit(auditLabel, "Image");
     }
 
     /// <summary>
     /// 내부 로직에서 파일 드롭 리스트를 다시 클립보드에 쓸 때 이벤트 재진입을 억제한다.
     /// </summary>
-    private void SetClipboardFileDropInternal(IEnumerable<string> filePaths, string auditLabel)
+    private void SetClipboardFileDropInternal(
+        IEnumerable<string> filePaths,
+        string auditLabel,
+        string? contentHash = null)
     {
-        _suppressNextClipboardEvent = true;
-        ClipboardService.SetFileDropList(filePaths);
-        _logger.Audit(auditLabel, string.Join(", ", filePaths.Select(GetClipboardPathDisplayName)));
+        var filePathList = filePaths.ToList();
+        RegisterSuppressedHash(
+            contentHash ?? _textStripper.ComputeHash(
+                string.Join('|', filePathList.Select(path => path.ToLowerInvariant()))));
+        ClipboardService.SetFileDropList(filePathList);
+        _logger.Audit(auditLabel, $"{filePathList.Count} files");
     }
 
     /// <summary>
@@ -381,7 +405,28 @@ internal sealed class SpasteApplicationContext : ApplicationContext
         DeleteUnusedImageFile(item);
         PersistHistory();
         _mainForm.SetItems(_historyItems);
-        _logger.Audit("DELETE", item.Title);
+        _logger.Audit("DELETE", item.ItemKind.ToString());
+    }
+
+    /// <summary>
+    /// 여러 선택 항목을 한 번에 삭제한다.
+    /// </summary>
+    private void DeleteSelection(IReadOnlyList<ClipboardItem> items)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var item in items)
+        {
+            _historyItems = _historyItems.Where(entry => entry.Id != item.Id).ToList();
+            DeleteUnusedImageFile(item);
+        }
+
+        PersistHistory();
+        _mainForm.SetItems(_historyItems);
+        _logger.Audit("DELETE_MULTI", $"{items.Count}개 항목 삭제");
     }
 
     /// <summary>
@@ -505,6 +550,14 @@ internal sealed class SpasteApplicationContext : ApplicationContext
 
         if (File.Exists(item.ImagePath))
         {
+            if (!AppPaths.IsManagedImagePath(item.ImagePath))
+            {
+                _logger.Error(
+                    "앱 관리 영역 밖 파일 삭제 시도를 차단했다.",
+                    new InvalidOperationException(item.ImagePath));
+                return;
+            }
+
             File.Delete(item.ImagePath);
         }
     }
@@ -533,5 +586,53 @@ internal sealed class SpasteApplicationContext : ApplicationContext
         var trimmedPath = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var fileName = Path.GetFileName(trimmedPath);
         return string.IsNullOrWhiteSpace(fileName) ? path : fileName;
+    }
+
+    /// <summary>
+    /// 내부 복사로 인해 다시 들어오는 동일 콘텐츠는 히스토리에 재삽입하지 않는다.
+    /// </summary>
+    private bool ShouldSuppressCapturedItem(ClipboardItem item)
+    {
+        if (!_suppressedClipboardHashes.TryGetValue(item.ContentHash, out var expiresAt))
+        {
+            return false;
+        }
+
+        return expiresAt > DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// 내부 복사 예정인 콘텐츠 해시를 등록해 뒤따르는 클립보드 업데이트를 무시한다.
+    /// </summary>
+    private void RegisterSuppressedHash(string contentHash)
+    {
+        if (string.IsNullOrWhiteSpace(contentHash))
+        {
+            return;
+        }
+
+        _suppressedClipboardHashes[contentHash] = DateTimeOffset.UtcNow.AddSeconds(2);
+    }
+
+    /// <summary>
+    /// 만료된 억제 해시를 정리해 메모리를 작게 유지한다.
+    /// </summary>
+    private void PruneSuppressedClipboardHashes()
+    {
+        if (_suppressedClipboardHashes.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var expiredHashes = _suppressedClipboardHashes
+            .Where(entry => entry.Value <= now)
+            .Select(entry => entry.Key)
+            .ToList();
+
+        foreach (var expiredHash in expiredHashes)
+        {
+            _suppressedClipboardHashes.Remove(expiredHash);
+        }
     }
 }

@@ -27,19 +27,24 @@ internal sealed class SettingsForm : Form
     {
         EditedSettings = currentSettings.Clone();
         Text = "Pelicano 설정";
+        Icon = IconHelper.LoadApplicationIcon();
         StartPosition = FormStartPosition.CenterParent;
+        AutoScaleMode = AutoScaleMode.Dpi;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
-        ClientSize = new Size(520, 392);
+        ClientSize = new Size(560, 430);
+        MinimumSize = new Size(560, 430);
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 9,
-            Padding = new Padding(18)
+            Padding = new Padding(20),
+            AutoScroll = true
         };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -48,13 +53,13 @@ internal sealed class SettingsForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var titleLabel = new Label
         {
             Text = "보안/운영 설정",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 14F, FontStyle.Bold)
+            Font = new Font("Segoe UI Semibold", 14F, FontStyle.Bold),
+            Margin = new Padding(0, 0, 0, 6)
         };
 
         _plainTextOnlyCheckBox = new CheckBox
@@ -62,7 +67,7 @@ internal sealed class SettingsForm : Form
             AutoSize = true,
             Text = "복사 즉시 Plain Text Only 강제 적용",
             Checked = currentSettings.EnforcePlainTextOnly,
-            Margin = new Padding(0, 12, 0, 0)
+            Margin = new Padding(0, 10, 0, 0)
         };
 
         _captureImagesCheckBox = new CheckBox
@@ -70,15 +75,15 @@ internal sealed class SettingsForm : Form
             AutoSize = true,
             Text = "파일 및 이미지 복사 히스토리 저장",
             Checked = currentSettings.CaptureImages,
-            Margin = new Padding(0, 8, 0, 0)
+            Margin = new Padding(0, 10, 0, 0)
         };
 
         _auditLoggingCheckBox = new CheckBox
         {
             AutoSize = true,
-            Text = "감사 로그 기록 활성화",
+            Text = "로그 활성화",
             Checked = currentSettings.EnableAuditLogging,
-            Margin = new Padding(0, 8, 0, 0)
+            Margin = new Padding(0, 10, 0, 0)
         };
 
         _startWithWindowsCheckBox = new CheckBox
@@ -86,23 +91,16 @@ internal sealed class SettingsForm : Form
             AutoSize = true,
             Text = "Windows 시작 시 자동 실행",
             Checked = currentSettings.StartWithWindows,
-            Margin = new Padding(0, 8, 0, 0)
-        };
-
-        _darkModeCheckBox = new CheckBox
-        {
-            AutoSize = true,
-            Text = "다크 모드 사용",
-            Checked = currentSettings.DarkMode,
-            Margin = new Padding(0, 8, 0, 0)
+            Margin = new Padding(0, 10, 0, 0)
         };
 
         var historyPanel = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(0, 14, 0, 0)
+            WrapContents = false,
+            Margin = new Padding(0, 16, 0, 0)
         };
         historyPanel.Controls.Add(new Label
         {
@@ -125,15 +123,28 @@ internal sealed class SettingsForm : Form
             AutoSize = true,
             Text =
                 "단축키는 Ctrl+Shift+V로 고정됩니다.\r\n" +
-                "목록은 한 번 클릭하면 바로 복사되고, Ctrl/Shift로 복수 선택할 수 있습니다.",
-            Margin = new Padding(0, 16, 0, 0)
+                "목록은 한 번 클릭하면 바로 복사되고, 복수 선택도 지원합니다.\r\n" +
+                "화이트 테마를 기본으로 사용하며, 설정 변경은 즉시 반영됩니다.",
+            MaximumSize = new Size(480, 0),
+            Margin = new Padding(0, 18, 0, 0)
+        };
+
+        _darkModeCheckBox = new CheckBox
+        {
+            AutoSize = true,
+            Text = "화이트 테마 고정",
+            Checked = true,
+            Enabled = false,
+            Margin = new Padding(0, 10, 0, 0)
         };
 
         var buttonPanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.RightToLeft,
-            AutoSize = true
+            AutoSize = true,
+            WrapContents = false,
+            Margin = new Padding(0, 20, 0, 0)
         };
 
         var saveButton = new Button
@@ -163,8 +174,8 @@ internal sealed class SettingsForm : Form
         layout.Controls.Add(_captureImagesCheckBox, 0, 2);
         layout.Controls.Add(_auditLoggingCheckBox, 0, 3);
         layout.Controls.Add(_startWithWindowsCheckBox, 0, 4);
-        layout.Controls.Add(_darkModeCheckBox, 0, 5);
-        layout.Controls.Add(historyPanel, 0, 6);
+        layout.Controls.Add(historyPanel, 0, 5);
+        layout.Controls.Add(_darkModeCheckBox, 0, 6);
         layout.Controls.Add(descriptionLabel, 0, 7);
         layout.Controls.Add(buttonPanel, 0, 8);
 
@@ -172,7 +183,7 @@ internal sealed class SettingsForm : Form
         AcceptButton = saveButton;
         CancelButton = cancelButton;
 
-        ThemeHelper.Apply(this, currentSettings.DarkMode);
+        ThemeHelper.Apply(this, darkMode: false);
     }
 
     /// <summary>
@@ -186,7 +197,7 @@ internal sealed class SettingsForm : Form
             CaptureImages = _captureImagesCheckBox.Checked,
             EnableAuditLogging = _auditLoggingCheckBox.Checked,
             StartWithWindows = _startWithWindowsCheckBox.Checked,
-            DarkMode = _darkModeCheckBox.Checked,
+            DarkMode = false,
             EnableMarkdownButtons = false,
             MaxHistoryItems = decimal.ToInt32(_maxHistoryCountNumeric.Value)
         };

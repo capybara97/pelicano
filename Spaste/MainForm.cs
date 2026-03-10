@@ -8,8 +8,8 @@ namespace Spaste;
 /// </summary>
 internal sealed class MainForm : Form
 {
-    private const int DesiredPanel1MinSize = 420;
-    private const int DesiredPanel2MinSize = 220;
+    private const int DesiredPanel1MinSize = 560;
+    private const int DesiredPanel2MinSize = 260;
     private static readonly string[] PreviewImageExtensions =
     [
         ".png",
@@ -33,20 +33,13 @@ internal sealed class MainForm : Form
     private readonly Button _settingsButton;
     private readonly Button _clearButton;
     private readonly Button _exitButton;
-    private readonly Button _toggleResultsButton;
     private readonly SplitContainer _splitContainer;
     private readonly TableLayoutPanel _previewLayout;
+    private readonly TextStripper _textStripper = new();
     private List<ClipboardItem> _allItems = [];
     private AppSettings _settings;
     private bool _allowClose;
     private bool _initialSplitApplied;
-    private bool _suppressSelectionCopy;
-    private bool _showAllItems;
-
-    /// <summary>
-    /// 텍스트 또는 원본 형식으로 다시 복사할 때 발생한다.
-    /// </summary>
-    public event EventHandler<ClipboardItem>? CopyPlainRequested;
 
     /// <summary>
     /// 현재 선택된 항목들을 즉시 다시 복사해 달라고 요청할 때 발생한다.
@@ -57,6 +50,11 @@ internal sealed class MainForm : Form
     /// 선택 항목 삭제를 요청할 때 발생한다.
     /// </summary>
     public event EventHandler<ClipboardItem>? DeleteRequested;
+
+    /// <summary>
+    /// 현재 선택된 여러 항목 삭제를 요청할 때 발생한다.
+    /// </summary>
+    public event EventHandler? SelectionDeleteRequested;
 
     /// <summary>
     /// 설정 창 열기를 요청할 때 발생한다.
@@ -80,6 +78,7 @@ internal sealed class MainForm : Form
     {
         _settings = settings.Clone();
         Text = "Pelicano";
+        Icon = IconHelper.LoadApplicationIcon();
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(960, 600);
         Size = new Size(1100, 720);
@@ -122,7 +121,7 @@ internal sealed class MainForm : Form
 
         _searchTextBox = new TextBox
         {
-            PlaceholderText = "내용, 파일명, 포맷으로 검색",
+            PlaceholderText = "검색",
             Dock = DockStyle.Fill,
             Margin = new Padding(14, 8, 16, 8),
             Font = new Font("Segoe UI", 15F, FontStyle.Regular)
@@ -132,7 +131,11 @@ internal sealed class MainForm : Form
         _deleteButton = CreateActionButton("선택 삭제", primary: false);
         _deleteButton.Click += (_, _) =>
         {
-            if (SelectedItem is not null)
+            if (SelectedItems.Count > 1)
+            {
+                SelectionDeleteRequested?.Invoke(this, EventArgs.Empty);
+            }
+            else if (SelectedItem is not null)
             {
                 DeleteRequested?.Invoke(this, SelectedItem);
             }
@@ -145,14 +148,19 @@ internal sealed class MainForm : Form
         _clearButton.Click += (_, _) => ClearRequested?.Invoke(this, EventArgs.Empty);
 
         _exitButton = CreateActionButton("종료", primary: false);
-        _exitButton.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
-
-        _toggleResultsButton = CreateActionButton("더 보기", primary: false);
-        _toggleResultsButton.Visible = false;
-        _toggleResultsButton.Click += (_, _) =>
+        _exitButton.Click += (_, _) =>
         {
-            _showAllItems = !_showAllItems;
-            ApplyFilter();
+            var result = MessageBox.Show(
+                this,
+                "Pelicano를 종료할까요?",
+                "Pelicano",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                ExitRequested?.Invoke(this, EventArgs.Empty);
+            }
         };
 
         headerLayout.Controls.Add(titleLabel, 0, 0);
@@ -166,17 +174,10 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill
         };
-        _splitContainer.Panel2Collapsed = true;
 
         _historyGrid = CreateHistoryGrid();
         _historyGrid.SelectionChanged += HandleGridSelectionChanged;
-        _historyGrid.CellDoubleClick += (_, _) =>
-        {
-            if (SelectedItem is not null)
-            {
-                CopyPlainRequested?.Invoke(this, SelectedItem);
-            }
-        };
+        _historyGrid.CellMouseUp += HandleGridCellMouseUp;
 
         _splitContainer.Panel1.Controls.Add(_historyGrid);
 
@@ -241,14 +242,12 @@ internal sealed class MainForm : Form
         var footerLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
+            ColumnCount = 1,
             AutoSize = true,
             Margin = new Padding(0, 10, 0, 0)
         };
         footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         footerLayout.Controls.Add(_summaryLabel, 0, 0);
-        footerLayout.Controls.Add(_toggleResultsButton, 1, 0);
 
         rootLayout.Controls.Add(headerLayout, 0, 0);
         rootLayout.Controls.Add(_splitContainer, 0, 1);
@@ -304,7 +303,8 @@ internal sealed class MainForm : Form
     public void ApplySettings(AppSettings settings)
     {
         _settings = settings.Clone();
-        ThemeHelper.Apply(this, _settings.DarkMode);
+        _settings.DarkMode = false;
+        ThemeHelper.Apply(this, darkMode: false);
         ApplyFilter();
     }
 
@@ -379,7 +379,7 @@ internal sealed class MainForm : Form
     {
         var keyword = _searchTextBox.Text.Trim();
         var filteredItems = string.IsNullOrWhiteSpace(keyword)
-            ? (_showAllItems ? _allItems : _allItems.Take(5).ToList())
+            ? _allItems
             : _allItems.Where(item =>
                 item.SearchIndex.Contains(keyword, StringComparison.CurrentCultureIgnoreCase) ||
                 item.Title.Contains(keyword, StringComparison.CurrentCultureIgnoreCase))
@@ -387,13 +387,9 @@ internal sealed class MainForm : Form
 
         PopulateGrid(filteredItems);
         var isSearchMode = !string.IsNullOrWhiteSpace(keyword);
-        _toggleResultsButton.Visible = !isSearchMode && _allItems.Count > 5;
-        _toggleResultsButton.Text = _showAllItems ? "최근 5개만" : "더 보기";
         _summaryLabel.Text = isSearchMode
             ? $"검색 결과 {filteredItems.Count}개"
-            : _showAllItems
-                ? $"전체 {_allItems.Count}개"
-                : $"최근 5개 / 전체 {_allItems.Count}개";
+            : $"전체 {_allItems.Count}개";
     }
 
     /// <summary>
@@ -401,7 +397,6 @@ internal sealed class MainForm : Form
     /// </summary>
     private void PopulateGrid(IReadOnlyList<ClipboardItem> items)
     {
-        _suppressSelectionCopy = true;
         _historyGrid.Rows.Clear();
 
         foreach (var item in items)
@@ -424,18 +419,23 @@ internal sealed class MainForm : Form
         {
             UpdatePreview();
         }
-
-        _suppressSelectionCopy = false;
     }
 
     /// <summary>
-    /// 행 선택이 바뀌면 미리보기를 갱신하고, 사용자 선택일 때는 즉시 복사를 요청한다.
+    /// 행 선택이 바뀌면 우선 미리보기만 갱신한다.
     /// </summary>
     private void HandleGridSelectionChanged(object? sender, EventArgs e)
     {
         UpdatePreview();
+    }
 
-        if (_suppressSelectionCopy || SelectedItems.Count == 0)
+    /// <summary>
+    /// 사용자가 마우스로 항목 선택을 마쳤을 때만 즉시 복사를 요청한다.
+    /// 그리드 재구성 중 발생하는 내부 선택 변경은 여기로 들어오지 않는다.
+    /// </summary>
+    private void HandleGridCellMouseUp(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.RowIndex < 0 || SelectedItems.Count == 0)
         {
             return;
         }
@@ -482,12 +482,22 @@ internal sealed class MainForm : Form
             case ClipboardItemKind.Text:
                 DisposePreviewImage();
                 SetPreviewImageVisible(false);
-                _previewTextBox.Text = item.PlainText;
+                _previewTextBox.Text = _textStripper.BuildDisplayText(item.PlainText);
                 break;
 
             case ClipboardItemKind.Image:
                 _previewTextBox.Text = item.ImagePath ?? string.Empty;
-                ShowPreviewImage(item.ImagePath);
+
+                if (AppPaths.IsManagedImagePath(item.ImagePath))
+                {
+                    ShowPreviewImage(item.ImagePath);
+                }
+                else
+                {
+                    DisposePreviewImage();
+                    SetPreviewImageVisible(false);
+                }
+
                 break;
 
             case ClipboardItemKind.FileDrop:
@@ -563,11 +573,6 @@ internal sealed class MainForm : Form
     /// </summary>
     private void EnsureSplitLayout()
     {
-        if (_splitContainer.Panel2Collapsed)
-        {
-            return;
-        }
-
         if (_splitContainer.Width <= 0)
         {
             return;
@@ -593,7 +598,7 @@ internal sealed class MainForm : Form
 
         var preferred = _initialSplitApplied
             ? _splitContainer.SplitterDistance
-            : (int)Math.Round(availableWidth * 0.64);
+            : (int)Math.Round(availableWidth * 0.72);
 
         _splitContainer.Panel1MinSize = 0;
         _splitContainer.Panel2MinSize = 0;

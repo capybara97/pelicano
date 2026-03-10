@@ -48,6 +48,33 @@ internal static class AppPaths
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "app.ico");
 
     /// <summary>
+    /// 앱이 직접 관리하는 저장 이미지 경로인지 확인한다.
+    /// DB 변조 등으로 외부 파일을 삭제/로드하는 일을 막는다.
+    /// </summary>
+    public static bool IsManagedImagePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var imagesRoot = Path.GetFullPath(ImagesRoot)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
+
+            return fullPath.StartsWith(imagesRoot, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(Path.GetExtension(fullPath), ".png", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// AppData 하위 필수 폴더를 미리 생성한다.
     /// </summary>
     public static void EnsureDirectories()

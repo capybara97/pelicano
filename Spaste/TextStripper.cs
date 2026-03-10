@@ -10,6 +10,8 @@ namespace Spaste;
 /// </summary>
 internal sealed class TextStripper
 {
+    private const string EncryptedClipboardPrefix = "ENCRYPTED_CLIPDATA";
+    private const string EncryptedClipboardPlaceholder = "<암호화된 문서입니다>";
     private static readonly Regex BulletRegex =
         new(@"^\s*[•·◦\-\*]\s+(?<value>.+)$", RegexOptions.Compiled);
 
@@ -123,6 +125,11 @@ internal sealed class TextStripper
             return "빈 텍스트";
         }
 
+        if (IsEncryptedClipboardText(text))
+        {
+            return EncryptedClipboardPlaceholder;
+        }
+
         var firstLine = text
             .Split([Environment.NewLine, "\n"], StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
@@ -140,6 +147,24 @@ internal sealed class TextStripper
     {
         return string.Join(' ', tokens.Where(token => !string.IsNullOrWhiteSpace(token)))
             .ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// 특정 텍스트가 암호화된 클립보드 데이터 포맷인지 판정한다.
+    /// </summary>
+    public bool IsEncryptedClipboardText(string? text)
+    {
+        return !string.IsNullOrWhiteSpace(text) &&
+               text.StartsWith(EncryptedClipboardPrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// GUI 표시용 텍스트를 반환한다.
+    /// 암호화된 클립보드 데이터는 실제 내용 대신 플레이스홀더를 보여준다.
+    /// </summary>
+    public string BuildDisplayText(string text)
+    {
+        return IsEncryptedClipboardText(text) ? EncryptedClipboardPlaceholder : text;
     }
 
     /// <summary>

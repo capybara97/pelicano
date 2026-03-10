@@ -6,6 +6,7 @@ namespace Spaste;
 /// </summary>
 internal static class ThemeHelper
 {
+    private static readonly Font GridFont = new("Segoe UI", 12F, FontStyle.Regular);
     private static readonly ThemePalette DarkPalette = new(
         Back: Color.FromArgb(250, 250, 252),
         Surface: Color.White,
@@ -118,11 +119,23 @@ internal static class ThemeHelper
         grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = palette.Text;
         grid.DefaultCellStyle.BackColor = palette.Surface;
         grid.DefaultCellStyle.ForeColor = palette.Text;
-        grid.DefaultCellStyle.SelectionBackColor = palette.AccentSoft;
-        grid.DefaultCellStyle.SelectionForeColor = palette.Text;
+        grid.DefaultCellStyle.Font = GridFont;
+        grid.DefaultCellStyle.Padding = new Padding(6, 4, 6, 4);
+        grid.DefaultCellStyle.WrapMode = DataGridViewTriState.False;
+        grid.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        grid.DefaultCellStyle.SelectionBackColor = palette.Accent;
+        grid.DefaultCellStyle.SelectionForeColor = Color.White;
         grid.AlternatingRowsDefaultCellStyle.BackColor = palette.Back;
         grid.AlternatingRowsDefaultCellStyle.ForeColor = palette.Text;
-        grid.RowTemplate.Height = 34;
+        grid.AlternatingRowsDefaultCellStyle.Font = GridFont;
+        grid.AlternatingRowsDefaultCellStyle.Padding = new Padding(6, 4, 6, 4);
+        grid.AlternatingRowsDefaultCellStyle.WrapMode = DataGridViewTriState.False;
+        grid.AlternatingRowsDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        grid.RowsDefaultCellStyle.SelectionBackColor = palette.Accent;
+        grid.RowsDefaultCellStyle.SelectionForeColor = Color.White;
+        grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = palette.Accent;
+        grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = Color.White;
+        grid.RowTemplate.Height = 36;
         grid.RowHeadersVisible = false;
     }
 

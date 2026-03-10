@@ -3,7 +3,8 @@
 
 #define AppName "Pelicano"
 #define AppVersion "1.0.0"
-#define Publisher "Pelicano"
+#define Publisher "김민상"
+#define CreatorLine "만든이 김민상"
 #define ExeName "Pelicano.exe"
 #define SourceRoot ".."
 #define PublishRoot "..\publish"
@@ -13,8 +14,9 @@
 AppId={{B68344D9-62CB-451A-9B12-68D1FDD3449A}
 AppName={#AppName}
 AppVersion={#AppVersion}
+AppVerName={#AppName} {#AppVersion}
 AppPublisher={#Publisher}
-AppPublisherURL=https://localhost/spaste
+AppComments={#CreatorLine}
 DefaultDirName={localappdata}\Programs\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
@@ -31,6 +33,9 @@ WizardStyle=modern
 ChangesAssociations=no
 UsePreviousAppDir=yes
 CloseApplications=no
+VersionInfoCompany={#Publisher}
+VersionInfoDescription={#AppName} Installer
+VersionInfoCopyright={#CreatorLine}
 
 [Languages]
 Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
@@ -59,3 +64,12 @@ Filename: "{app}\{#ExeName}"; Description: "{#AppName} 실행"; Flags: nowait po
 [UninstallDelete]
 Type: filesandordirs; Name: "{userappdata}\Pelicano"
 Type: filesandordirs; Name: "{userappdata}\Spaste"
+
+[Code]
+procedure InitializeWizard;
+begin
+  WizardForm.WelcomeLabel2.Caption :=
+    WizardForm.WelcomeLabel2.Caption + #13#10#13#10 + '{#CreatorLine}';
+  WizardForm.FinishedLabel.Caption :=
+    WizardForm.FinishedLabel.Caption + #13#10#13#10 + '{#CreatorLine}';
+end;
