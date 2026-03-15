@@ -1,0 +1,20 @@
+Pelicano Privacy Notice
+
+Pelicano is designed to store clipboard history primarily on the user's local device.
+During normal use, settings, history data, image cache files, and logs are stored in the
+local application data folder of the current Windows user account.
+
+Application behavior
+1. Text, image, and file-drop history may be stored locally on the user's PC.
+2. When automatic updates are enabled, the app may access the network to check version information
+   and download installer files.
+3. The app does not provide remote account creation or cloud sync as a default feature.
+
+Website hosting and file delivery
+The hosting or storage provider used for downloads or updates may process minimal technical access information
+for service operation and security maintenance.
+That information may include general request metadata such as IP address, access time, request URL, and user agent.
+The developer may not separately collect or continuously review that information.
+
+Users remain responsible for deciding whether to store clipboard history that may contain sensitive information.
+Depending on personal or organizational policy, the feature may be disabled or the app may be avoided entirely.

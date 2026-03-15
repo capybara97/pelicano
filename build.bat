@@ -8,24 +8,25 @@ set "DOTNET_CLI_HOME=%ROOT%.dotnet"
 set "NUGET_PACKAGES=%ROOT%.nuget\packages"
 set "NUGET_HTTP_CACHE_PATH=%ROOT%.nuget\http-cache"
 set "NUGET_CONFIG=%ROOT%NuGet.Config"
-set "PNG_ICON=%ROOT%Spaste\Resources\app.png"
-set "ICO_ICON=%ROOT%Spaste\Resources\app.ico"
+set "SOURCE_PNG_ICON=%ROOT%Winui\Resources\icon-source.png"
+set "PNG_ICON=%ROOT%Winui\Resources\app-icon.png"
+set "ICO_ICON=%ROOT%Winui\Resources\app-icon.ico"
 set "PUBLISH_DIR=%ROOT%publish"
 set "ISCC_EXE=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 
 if not exist "%APPDATA%\NuGet" mkdir "%APPDATA%\NuGet"
 
 echo [1/4] Convert PNG icon to ICO
-powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\Convert-PngToIco.ps1" -PngPath "%PNG_ICON%" -IcoPath "%ICO_ICON%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%scripts\Convert-PngToIco.ps1" -SourcePngPath "%SOURCE_PNG_ICON%" -PngPath "%PNG_ICON%" -IcoPath "%ICO_ICON%"
 if errorlevel 1 goto :error
 
 echo [2/4] Restore NuGet packages
-dotnet restore "%ROOT%Spaste.sln" -r win-x64 --configfile "%NUGET_CONFIG%"
+dotnet restore "%ROOT%Pelicano.sln" -r win-x64 --configfile "%NUGET_CONFIG%"
 if errorlevel 1 goto :error
 
 echo [3/4] Publish release build
 if exist "%PUBLISH_DIR%" rmdir /s /q "%PUBLISH_DIR%"
-dotnet publish "%ROOT%Spaste\Spaste.csproj" -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=false -o "%PUBLISH_DIR%"
+dotnet publish "%ROOT%Winui\Pelicano.WinUI.csproj" -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=false -o "%PUBLISH_DIR%"
 if errorlevel 1 goto :error
 
 echo [4/4] Build Inno Setup installer
@@ -36,7 +37,7 @@ if not exist "%ISCC_EXE%" (
     exit /b 1
 )
 
-"%ISCC_EXE%" "%ROOT%Installer\Spaste.iss"
+"%ISCC_EXE%" "%ROOT%Installer\Pelicano.iss"
 if errorlevel 1 goto :error
 
 echo [DONE] Publish output and installer were generated successfully.

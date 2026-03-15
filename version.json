@@ -1,0 +1,6 @@
+{
+  "version": "0.3",
+  "installerUrl": "https://qfqxifaqnympxjbz.public.blob.vercel-storage.com/Pelicano-Installer-v0.3.exe",
+  "sha256": "2C3DAAD5A1AC57C31CF8DA1F0773C282DBBC97B538B3DD9801E8D9C8950975C1",
+  "releaseNotes": "WinUI 단일화, 다국어 설치기, 법률 문서 포함, 업데이트 흐름 개선"
+}

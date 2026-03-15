@@ -1,0 +1,16 @@
+Pelicano Installation Notice and License Summary
+
+The Pelicano application itself is distributed under the MIT License.
+Your rights to use, copy, modify, redistribute, and use the software commercially
+remain governed by the MIT License and its copyright notice.
+
+This installer page does not replace the MIT License and does not narrow those rights.
+Please review the following before continuing:
+
+1. Pelicano is a desktop application designed to manage clipboard history on a Windows device.
+2. If your organization has internal security or compliance rules, review them before use.
+3. The software and accompanying documents are provided "as is" to the extent permitted by applicable law.
+4. Rights and obligations for open-source components continue to follow their respective licenses.
+
+Please refer to the LICENSE file included with the distribution for the full MIT License text.
+
