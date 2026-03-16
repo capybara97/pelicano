@@ -2,7 +2,7 @@ namespace Pelicano;
 
 /// <summary>
 /// Pelicano가 실행 중 참조하는 경로를 한곳에서 관리한다.
-/// 사용자별 로컬 저장소는 %APPDATA%\Pelicano 아래로 고정해 보안팀 요구사항을 맞춘다.
+/// 사용자 데이터는 %APPDATA%\Pelicano 아래에 두고, 업데이트 스테이징 파일은 별도 로컬 폴더에 둔다.
 /// </summary>
 internal static class AppPaths
 {
@@ -24,8 +24,12 @@ internal static class AppPaths
 
     /// <summary>
     /// 다운로드한 업데이트 설치 파일 저장 폴더다.
+    /// 설치 중 %APPDATA%\Pelicano가 정리될 수 있으므로 별도 LocalAppData 경로를 사용한다.
     /// </summary>
-    public static readonly string UpdatesRoot = Path.Combine(DataRoot, "updates");
+    public static readonly string UpdatesRoot = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Pelicano",
+        "updates");
 
     /// <summary>
     /// 앱 설정 JSON 파일 경로다.

@@ -55,13 +55,7 @@ internal static class AppVersionInfo
             }
         }
 
-        version = parts.Length switch
-        {
-            1 => new Version(numbers[0], 0),
-            2 => new Version(numbers[0], numbers[1]),
-            3 => new Version(numbers[0], numbers[1], numbers[2]),
-            _ => new Version(numbers[0], numbers[1], numbers[2], numbers[3])
-        };
+        version = new Version(numbers[0], numbers[1], numbers[2], numbers[3]);
         return true;
     }
 

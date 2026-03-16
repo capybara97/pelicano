@@ -31,8 +31,10 @@ internal sealed class TrayManager : IDisposable
     private bool _captureAssetsEnabled;
     private bool _disposed;
     private bool _plainTextOnlyEnabled;
+    private bool _usesLegacyCallbackLayout;
 
     public TrayManager(
+        IntPtr ownerWindowHandle,
         AppSettings settings,
         Action showHistoryAction,
         Action togglePlainTextAction,
@@ -49,7 +51,7 @@ internal sealed class TrayManager : IDisposable
         _exitAction = exitAction;
         _window = new HiddenMessageWindow(HandleWindowMessage);
         _taskbarCreatedMessage = NativeMethods.RegisterWindowMessage("TaskbarCreated");
-        _iconHandle = IconHelper.LoadApplicationIconHandle(out _ownsIconHandle);
+        _iconHandle = IconHelper.LoadApplicationIconHandle(ownerWindowHandle, out _ownsIconHandle);
 
         RefreshState(settings);
         AddTrayIcon();
@@ -101,7 +103,7 @@ internal sealed class TrayManager : IDisposable
         }
 
         data.uVersion = NativeMethods.NOTIFYICON_VERSION_4;
-        NativeMethods.Shell_NotifyIcon(NativeMethods.NIM_SETVERSION, ref data);
+        _usesLegacyCallbackLayout = !NativeMethods.Shell_NotifyIcon(NativeMethods.NIM_SETVERSION, ref data);
     }
 
     private void UpdateTrayIcon()
@@ -156,8 +158,16 @@ internal sealed class TrayManager : IDisposable
             return;
         }
 
-        switch ((uint)lParam.ToInt64())
+        if (!_usesLegacyCallbackLayout && GetTrayIconId(lParam) != TrayIconId)
         {
+            return;
+        }
+
+        var eventCode = GetNotificationEventCode(lParam);
+        switch (eventCode)
+        {
+            case NativeMethods.NIN_SELECT:
+            case NativeMethods.NIN_KEYSELECT:
             case NativeMethods.WM_LBUTTONUP:
             case NativeMethods.WM_LBUTTONDBLCLK:
                 _showHistoryAction();
@@ -165,14 +175,15 @@ internal sealed class TrayManager : IDisposable
 
             case NativeMethods.WM_RBUTTONUP:
             case NativeMethods.WM_CONTEXTMENU:
-                ShowContextMenu();
+                ShowContextMenu(GetAnchorPoint(wParam));
                 break;
         }
     }
 
-    private void ShowContextMenu()
+    private void ShowContextMenu(NativeMethods.POINT? anchorPoint = null)
     {
-        if (!NativeMethods.GetCursorPos(out var cursor))
+        var cursor = anchorPoint.GetValueOrDefault();
+        if (anchorPoint is null && !NativeMethods.GetCursorPos(out cursor))
         {
             return;
         }
@@ -264,6 +275,30 @@ internal sealed class TrayManager : IDisposable
                 _exitAction();
                 break;
         }
+    }
+
+    private uint GetNotificationEventCode(IntPtr lParam)
+    {
+        var rawValue = unchecked((ulong)lParam.ToInt64());
+        return _usesLegacyCallbackLayout
+            ? unchecked((uint)rawValue)
+            : unchecked((uint)(rawValue & 0xFFFF));
+    }
+
+    private static uint GetTrayIconId(IntPtr lParam)
+    {
+        var rawValue = unchecked((ulong)lParam.ToInt64());
+        return unchecked((uint)((rawValue >> 16) & 0xFFFF));
+    }
+
+    private static NativeMethods.POINT GetAnchorPoint(IntPtr wParam)
+    {
+        var rawValue = unchecked((ulong)wParam.ToInt64());
+        return new NativeMethods.POINT
+        {
+            X = unchecked((short)(rawValue & 0xFFFF)),
+            Y = unchecked((short)((rawValue >> 16) & 0xFFFF))
+        };
     }
 
     private sealed class HiddenMessageWindow : IDisposable

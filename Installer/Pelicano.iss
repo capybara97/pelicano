@@ -2,7 +2,7 @@
 ; 관리자 설치와 사용자 설치를 모두 허용하도록 PrivilegesRequiredOverridesAllowed를 활성화했다.
 
 #define AppName "Pelicano"
-#define AppVersion "0.2"
+#define AppVersion "0.5.1"
 #define Publisher "김민상"
 #define CreatorLine "만든이 김민상"
 #define ExeName "Pelicano.exe"
@@ -83,6 +83,7 @@ Filename: "{app}\{#ExeName}"; Description: "{cm:RunApp}"; Flags: nowait postinst
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{userappdata}\Pelicano"
+Type: filesandordirs; Name: "{localappdata}\Pelicano\updates"
 
 [Code]
 procedure InitializeWizard;

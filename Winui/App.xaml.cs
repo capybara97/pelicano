@@ -31,12 +31,14 @@ public partial class App : Application
             _mainWindow = new MainWindow(
                 _host,
                 ExitApplication,
-                () => (_trayManager?.IsAvailable ?? false) || _host.IsBackgroundModeAvailable);
+                () => _trayManager?.IsAvailable ?? false);
             _host.AttachWindow(_mainWindow.WindowHandle);
+            _mainWindow.Activate();
 
             try
             {
                 _trayManager = new TrayManager(
+                    _mainWindow.WindowHandle,
                     _host.Settings,
                     _mainWindow.ShowWindow,
                     _host.TogglePlainTextOnly,
@@ -72,7 +74,6 @@ public partial class App : Application
                 _trayManager?.RefreshState(_host.Settings);
             });
 
-            _mainWindow.Activate();
             _mainWindow.ShowStartupState();
         }
         catch (Exception exception)

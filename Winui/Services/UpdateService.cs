@@ -12,7 +12,8 @@ internal sealed class UpdateService
     internal const string ManifestUrl = "https://qfqxifaqnympxjbz.public.blob.vercel-storage.com/version.json";
     private const string DefaultInstallerUrl =
         "https://qfqxifaqnympxjbz.public.blob.vercel-storage.com/Pelicano-Installer.exe";
-    private static readonly HttpClient HttpClient = CreateHttpClient();
+    private static readonly HttpClient ManifestHttpClient = CreateHttpClient(TimeSpan.FromSeconds(15));
+    private static readonly HttpClient DownloadHttpClient = CreateHttpClient(TimeSpan.FromMinutes(20));
     private readonly Logger _logger;
 
     public UpdateService(Logger logger)
@@ -37,7 +38,7 @@ internal sealed class UpdateService
 
         try
         {
-            using var response = await HttpClient.GetAsync(manifestUri, cancellationToken);
+            using var response = await ManifestHttpClient.GetAsync(manifestUri, cancellationToken);
             response.EnsureSuccessStatusCode();
             var payload = await response.Content.ReadAsStringAsync(cancellationToken);
             using var document = JsonDocument.Parse(payload);
@@ -125,7 +126,7 @@ internal sealed class UpdateService
                 }
             }
 
-            using var response = await HttpClient.GetAsync(
+            using var response = await DownloadHttpClient.GetAsync(
                 installerUri,
                 HttpCompletionOption.ResponseHeadersRead,
                 cancellationToken);
@@ -133,7 +134,6 @@ internal sealed class UpdateService
 
             var totalBytes = response.Content.Headers.ContentLength;
             await using var input = await response.Content.ReadAsStreamAsync(cancellationToken);
-            await using var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None);
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             var buffer = new byte[81920];
             long receivedBytes = 0;
@@ -143,22 +143,26 @@ internal sealed class UpdateService
                 totalBytes.HasValue && totalBytes.Value > 0 ? 0d : null,
                 !totalBytes.HasValue || totalBytes.Value <= 0));
 
-            while (true)
+            await using (var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                var bytesRead = await input.ReadAsync(buffer, cancellationToken);
-                if (bytesRead <= 0)
+                while (true)
                 {
-                    break;
+                    var bytesRead = await input.ReadAsync(buffer, cancellationToken);
+                    if (bytesRead <= 0)
+                    {
+                        break;
+                    }
+
+                    await output.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+                    hash.AppendData(buffer, 0, bytesRead);
+                    receivedBytes += bytesRead;
+
+                    progress?.Report(BuildDownloadProgress(receivedBytes, totalBytes));
                 }
 
-                await output.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
-                hash.AppendData(buffer, 0, bytesRead);
-                receivedBytes += bytesRead;
-
-                progress?.Report(BuildDownloadProgress(receivedBytes, totalBytes));
+                await output.FlushAsync(cancellationToken);
             }
 
-            await output.FlushAsync(cancellationToken);
             var actualSha256 = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
             progress?.Report(new UpdateProgressInfo("설치 파일 무결성을 확인하는 중입니다...", 1d));
 
@@ -344,11 +348,11 @@ internal sealed class UpdateService
     /// <summary>
     /// 업데이트 요청용 HttpClient를 한 번만 초기화한다.
     /// </summary>
-    private static HttpClient CreateHttpClient()
+    private static HttpClient CreateHttpClient(TimeSpan timeout)
     {
         var client = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(15)
+            Timeout = timeout
         };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Pelicano-Updater");
         return client;

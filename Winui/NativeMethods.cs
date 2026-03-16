@@ -13,15 +13,26 @@ internal static class NativeMethods
     public const int WM_COMMAND = 0x0111;
     public const int WM_TIMER = 0x0113;
     public const int WM_DESTROY = 0x0002;
+    public const int WM_USER = 0x0400;
     public const int WM_CONTEXTMENU = 0x007B;
+    public const int WM_GETICON = 0x007F;
     public const int WM_CLIPBOARDUPDATE = 0x031D;
     public const int WM_HOTKEY = 0x0312;
     public const int WM_LBUTTONUP = 0x0202;
     public const int WM_LBUTTONDBLCLK = 0x0203;
     public const int WM_RBUTTONUP = 0x0205;
+    public const int NIN_SELECT = WM_USER;
+    public const int NIN_KEYSELECT = WM_USER + 1;
+    public const int ICON_SMALL = 0;
+    public const int ICON_BIG = 1;
+    public const int ICON_SMALL2 = 2;
+    public const int GCLP_HICON = -14;
+    public const int GCLP_HICONSM = -34;
     public const int WS_OVERLAPPED = 0x00000000;
     public const int WS_EX_TOOLWINDOW = 0x00000080;
     public const int WS_EX_NOACTIVATE = 0x08000000;
+    public const int SM_CXSMICON = 49;
+    public const int SM_CYSMICON = 50;
     public const uint IMAGE_ICON = 1;
     public const uint LR_DEFAULTSIZE = 0x00000040;
     public const uint LR_LOADFROMFILE = 0x00000010;
@@ -134,6 +145,9 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool DestroyIcon(IntPtr hIcon);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr CopyIcon(IntPtr hIcon);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern IntPtr LoadImage(
         IntPtr hInst,
@@ -145,6 +159,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr LoadIcon(IntPtr hInstance, IntPtr lpIconName);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern int GetSystemMetrics(int nIndex);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern ushort RegisterClassEx([In] ref WNDCLASSEX lpwcx);
@@ -173,6 +190,12 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW", SetLastError = true)]
+    public static extern IntPtr GetClassLongPtr(IntPtr hWnd, int nIndex);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
